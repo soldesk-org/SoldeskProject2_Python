@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+python-multipart
+python-dotenv
+requests
+
+google-genai
+playwright
+PyMuPDF
+
+rapidocr
+onnxruntime
+opencv-python-headless
+numpy
