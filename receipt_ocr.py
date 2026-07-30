@@ -4,6 +4,7 @@ import asyncio
 import base64
 import difflib
 import json
+import logging
 import re
 
 import cv2
@@ -18,6 +19,7 @@ from rapidocr.utils.typings import ModelType, OCRVersion
 import config
 
 router = APIRouter(tags=["receipt-ocr"])
+logger = logging.getLogger(__name__)
 
 
 class MenuItem(BaseModel):
@@ -603,15 +605,27 @@ def receipt_error_response(exc: ReceiptError) -> JSONResponse:
     return JSONResponse(status_code=exc.status_code, content=body)
 
 
+# 상호명 폴백 파서(parse_restaurant_name)가 라벨을 못 찾으면 "날짜/가격/항목 형식이 아닌 첫 줄"을 그냥
+# 상호명으로 추측하는데, 그 줄에 메뉴명과 깨진 바코드/번호가 섞여 들어오는 경우가 있다(예: "김치찌개
+# 공000'6"). store_name이 null이 아니라는 이유만으로 "완전하다"고 보면 이런 값을 그대로 통과시키게 되어,
+# 실제 상호명에는 잘 안 나오는 문자(숫자/따옴표)를 섞어 쓴 값을 의심 신호로 추가한다(2026-07-22).
+_SUSPICIOUS_STORE_NAME_CHARS = re.compile(r"[0-9'\"]")
+
+
 def _needs_ai_assist(parsed: dict) -> bool:
     if not parsed["transaction_id"]:
         return True
-    if not parsed["store_name"]:
+    store_name = parsed["store_name"]
+    if not store_name:
         return True
     if not parsed["order_datetime"]:
         return True
     menu_names = {item["name"] for item in parsed["menu_items"]}
-    if parsed["store_name"] in menu_names:
+    if store_name in menu_names:
+        return True
+    if any(name and (name in store_name or store_name in name) for name in menu_names):
+        return True
+    if _SUSPICIOUS_STORE_NAME_CHARS.search(store_name):
         return True
     if not parsed["menu_items"] and parsed["total_price"]:
         return True
@@ -635,7 +649,9 @@ async def parse_receipt_endpoint(request: Request, file: UploadFile = File(...))
         try:
             parsed = await asyncio.to_thread(correct_receipt_with_ai, content, parsed, config.UPSTAGE_API_KEY)
         except Exception:
-            pass
+            # 업스테이지 호출이 실패해도 무료 파서 결과로는 계속 진행하지만(가용성 우선), 로그 없이
+            # 조용히 넘어가면 "보정이 왜 안 됐는지" 알 방법이 없어진다(2026-07-22 실제로 겪음).
+            logger.exception("Upstage 영수증 보정 호출 실패 — 무료 파서 결과로 진행합니다.")
 
     if not lines and not parsed["store_name"] and not parsed["menu_items"] and not parsed["total_price"]:
         return receipt_error_response(

@@ -12,9 +12,3 @@ rapidocr
 onnxruntime
 opencv-python-headless
 numpy
-
-transformers
-accelerate
-sentencepiece
-torch
-httpx

@@ -44,7 +44,8 @@ _EXTRACTION_PROMPT = """\
   "issue_number": "문서 상단의 발급번호 14자리, 예: 68786881703565",
   "representative_name": "대표자성명",
   "start_date": "개업일 8자리 YYYYMMDD",
-  "company_name": "상호(법인명)"
+  "company_name": "상호(법인명)",
+  "address": "사업장 소재지(사업장 주소) 전체 텍스트"
 }
 """
 
@@ -82,8 +83,8 @@ def extract_business_fields(image_bytes: bytes, mime_type: str = "image/png") ->
         "representative_name": str(data.get("representative_name", "")).strip(),
         "start_date": str(data.get("start_date", "")).strip(),
         "company_name": str(data.get("company_name", "")).strip(),
+        "address": str(data.get("address", "")).strip(),
     }
-
 
 NTS_BASE_URL = "https://api.odcloud.kr/api/nts-businessman/v1"
 NTS_VALIDATE_URL = f"{NTS_BASE_URL}/validate"
@@ -256,7 +257,7 @@ async def verify(file: UploadFile = File(...)):
                     "corp_no": "",
                     "b_sector": "",
                     "b_type": "",
-                    "b_adr": "",
+                    "b_adr": fields["address"],
                 }
             ],
         )
