@@ -14,3 +14,4 @@ build/
 *.log
 *.ps1
 *.cmd
+docs/
