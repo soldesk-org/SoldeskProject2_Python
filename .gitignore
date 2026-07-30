@@ -10,3 +10,7 @@ __pycache__/
 dist/
 build/
 .DS_Store
+*.txt
+*.log
+*.ps1
+*.cmd
