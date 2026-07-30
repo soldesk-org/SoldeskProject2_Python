@@ -30,7 +30,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-MODEL_NAME = os.getenv("FOOTTRIP_MODEL_NAME", "Qwen/Qwen2.5-1.5B-Instruct")
+MODEL_NAME = os.getenv("FOOTTRIP_MODEL_NAME", "kakaocorp/kanana-nano-2.1b-instruct")
 KAKAO_URL = "https://dapi.kakao.com/v2/local/search/keyword.json"
 KAKAO_REST_API_KEY = os.getenv("KAKAO_REST_API_KEY", "").strip()
 REVIEW_STATS_URL = os.getenv(
