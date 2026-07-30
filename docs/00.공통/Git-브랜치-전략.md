@@ -57,11 +57,27 @@ develop
 | main → VM 자동 배포 | 미연결 | 저장소에 Jenkinsfile 없음, CI/CD 파이프라인 구축 필요 (Web 저장소의 `CI-CD-Jenkins-구축-가이드.md` 참고 가능) |
 
 ------------------------------------------------------------------------
-## 3. 참고
+## 3. 작업 폴더와 git 폴더 분리
+------------------------------------------------------------------------
+처음에 실제 작업 폴더(`SoldeskProject2_Python`, keyword-extraction/receipt-biz-verify/review-filter가
+있는 폴더)에 직접 `git init`을 했더니, 브랜치를 체크아웃할 때마다 git이 해당 브랜치의 추적 파일
+(business_auth.py, keyword_api.py 등)을 작업 폴더 루트에 그대로 풀어놓아서 원래 폴더 안의 파일과
+중복되어 보이는 문제가 있었음. 이를 해결하기 위해 아래와 같이 분리함.
+
+- `SoldeskProject2_Python` (작업 폴더): keyword-extraction, receipt-biz-verify, review-filter 등
+  코드 작업만 하는 공간. git과 무관하며 루트에 다른 파일이 섞이지 않음.
+- `SoldeskProject2_Python-git` (git 전용 폴더): `soldesk-org/SoldeskProject2_Python` 저장소를
+  clone해 둔 폴더. 앞으로 GitHub에 뭔가 올릴 일이 있으면 이 폴더에서만 브랜치 체크아웃/커밋/push를
+  진행함.
+
+앞으로 GitHub에 뭔가 올릴 일이 있으면 `SoldeskProject2_Python-git` 폴더에서 작업한다. 작업 폴더
+(`SoldeskProject2_Python`)는 이제 코드 작업 전용 공간이다.
+
+------------------------------------------------------------------------
+## 4. 참고
 ------------------------------------------------------------------------
 - `review-filter` 폴더는 Python이 아닌 Java(웹 백엔드)로 이관 예정이라 이 저장소에서 제외함.
 - `keyword-extraction/run_recommendation_api.cmd`에 카카오 API 키가 평문으로 있어 커밋하지 않음, `.env`로 이전 필요.
 - `keyword-extraction/keyword_extraction.py` + 구버전 `main.py`는 `keyword_api.py`(신버전)로 대체된 것으로 보여 이번 반영에서 제외함. 불필요하면 삭제 검토.
 - GitHub CLI(`gh`)가 로컬에 없어 실제 PR 화면 없이 `--no-ff` merge commit으로 동일한 이력만 남기고 직접 push함.
 - `requirements.txt`, `.ps1`, `.log`, `.cmd` 파일은 각 브랜치에서 git 추적 대상에서 제외함(팀 결정). 의존성 목록은 필요 시 이 문서나 별도 문서에 텍스트로 남기는 방식으로 관리.
-- git 저장소는 실제 작업 폴더(`SoldeskProject2_Python`)가 아닌 별도 폴더(`SoldeskProject2_Python-git`)에서 관리함. 작업 폴더에는 git 관련 파일이 섞이지 않도록 분리.
