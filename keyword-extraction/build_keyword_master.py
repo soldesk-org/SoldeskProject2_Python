@@ -11,7 +11,7 @@ from pathlib import Path
 
 import openpyxl
 
-EXCEL_PATH = Path(__file__).with_name("web_menu_keyword_db.xlsx")
+EXCEL_PATH = r"C:\Users\sdedu01\Documents\카카오톡 받은 파일\web_menu_keyword_db.xlsx"
 OUT_PATH = Path(__file__).with_name("keyword_master.json")
 
 wb = openpyxl.load_workbook(EXCEL_PATH, data_only=True)

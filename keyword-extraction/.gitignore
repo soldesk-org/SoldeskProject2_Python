@@ -1,0 +1,16 @@
+# 비밀 설정 — 절대 커밋 금지
+.env
+!.env.example
+
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+.DS_Store
+*.log

@@ -257,12 +257,23 @@ async def verify(file: UploadFile = File(...)):
                     "corp_no": "",
                     "b_sector": "",
                     "b_type": "",
-                    "b_adr": fields["address"],
+                    # b_adr(사업장주소)은 선택 항목인데, OCR이 읽은 주소에는 "-M176(죽전동, 죽전스카이프라자)"
+                    # 같은 상세동/건물명 표기가 섞여 있어 국세청에 등록된 정확한 주소 형식과 달라 진위확인
+                    # 전체가 실패하는 걸 실사용 중 확인함(2026-08-04) — 다른 필드가 전부 정확해도 이 값
+                    # 하나 때문에 "확인할 수 없습니다"가 났었다. 검증 정확도에 필수가 아니므로 보내지 않는다.
+                    "b_adr": "",
                 }
             ],
         )
-    except Exception as e:
-        return _fail(400, "VALIDATION_CHECK_ERROR", f"진위확인 API 호출 중 오류가 발생했습니다: {e}")
+    except requests.exceptions.RequestException as e:
+        # requests의 HTTPError 등을 str()로 그대로 노출하면 요청 URL에 담긴 serviceKey(비밀값)까지
+        # 사용자 화면에 그대로 보이게 된다(2026-08-04 실사용 중 발견) — 상태 코드만 안전하게 뽑아서 보여준다.
+        status = e.response.status_code if e.response is not None else None
+        detail = f" (HTTP {status})" if status else ""
+        return _fail(503, "VALIDATION_CHECK_ERROR",
+                     f"국세청 진위확인 서비스에 일시적으로 연결할 수 없습니다{detail}. 잠시 후 다시 시도해주세요.")
+    except Exception:
+        return _fail(400, "VALIDATION_CHECK_ERROR", "진위확인 처리 중 오류가 발생했습니다.")
 
     data_list = validation.get("data") or []
     if not data_list or data_list[0].get("valid") != "01":
