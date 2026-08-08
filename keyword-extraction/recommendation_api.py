@@ -26,7 +26,8 @@ from typing import Any, Literal
 
 import httpx
 import torch
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -43,6 +44,12 @@ MAX_KAKAO_QUERIES = int(os.getenv("FOOTTRIP_MAX_KAKAO_QUERIES", "12"))
 MIN_REVIEW_COUNT = int(os.getenv("FOOTTRIP_MIN_REVIEW_COUNT", "3"))
 DEFAULT_RESULT_SIZE = int(os.getenv("FOOTTRIP_DEFAULT_RESULT_SIZE", "10"))
 MASTER_PATH = Path(__file__).with_name("keyword_master.json")
+
+# ai.eattyway.com이 Cloudflare Tunnel로 인터넷에 그대로 노출돼 있어, 우리 웹 백엔드를 거치지 않은
+# 직접 호출로 GPU LLM 추론과 카카오 로컬 API 호출량을 낭비당할 수 있다(2026-08-08 실측 확인 —
+# 토큰 없이 /api/keywords가 그대로 200을 반환함). receipt-biz-verify(main.py)와 같은 방식으로
+# X-Internal-Token 헤더 검증을 추가한다. 값이 비어있으면(로컬 개발) 검사를 건너뛴다(fail-open).
+INTERNAL_API_TOKEN = os.getenv("INTERNAL_API_TOKEN", "").strip()
 
 with MASTER_PATH.open("r", encoding="utf-8") as file:
     MASTER = json.load(file)
@@ -444,6 +451,18 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="FootTrip AI Recommendation API", version="3.0.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def verify_internal_token(request: Request, call_next):
+    if INTERNAL_API_TOKEN:
+        token = request.headers.get("x-internal-token")
+        if token != INTERNAL_API_TOKEN:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "UNAUTHORIZED", "message": "허용되지 않은 요청입니다."},
+            )
+    return await call_next(request)
 
 
 @app.get("/health")
