@@ -336,9 +336,11 @@ class ReviewStatsClient:
         if not place_ids or not keywords:
             return {}
         try:
+            headers = {"X-Internal-Token": INTERNAL_API_TOKEN} if INTERNAL_API_TOKEN else {}
             response = await self.client.post(
                 REVIEW_STATS_URL,
                 json={"place_ids": place_ids, "keywords": keywords},
+                headers=headers,
             )
             response.raise_for_status()
             payload = response.json()
