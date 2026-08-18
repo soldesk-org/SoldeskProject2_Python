@@ -426,6 +426,16 @@ def parse_receipt_lines(lines):
     if total and len(menu) > 1:
         menu = [item for item in menu if item["price"] != total]
 
+    # 2026-08-19 추가 — parse_total()이 합계 줄을 못 찾거나 OCR 오인식(예: "76,000"을 "9"로 잘못 읽음)
+    # 때문에 실제보다 훨씬 작은 값을 반환하는 경우가 실사용 중 확인됨(메뉴는 정상 인식됐는데 결제금액만
+    # "9원"처럼 나옴). 총액이 메뉴 중 가장 비싼 항목 하나보다도 작으면 명백히 잘못된 값이므로(할인이
+    # 있어도 최고가 단일 항목보다 총액이 작을 수는 거의 없음) 메뉴 합계로 대체한다.
+    if menu:
+        menu_sum = sum(int(item["price"]) for item in menu)
+        max_item_price = max(int(item["price"]) for item in menu)
+        if total is None or int(total) < max_item_price:
+            total = menu_sum
+
     return {
         "store_name": name,
         "order_datetime": dt,
