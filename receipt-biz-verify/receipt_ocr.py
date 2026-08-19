@@ -484,12 +484,16 @@ def parse_receipt(engine: RapidOCR, image, preprocess: bool = True):
         for text, box in zip(lines, line_boxes):
             if not text:
                 continue
+            # 2026-08-20 수정 — RapidOCR 박스 좌표는 numpy float32라 json.dumps()가 직렬화하지 못해
+            # Upstage AI 보정 호출(correct_receipt_with_ai → json.dumps(draft))이 매번 예외로 실패하고
+            # 있었다("메뉴 인식이 요즘 잘 안 된다"는 지적의 원인 — AI 보정 없이 무료 파서 결과로만
+            # 계속 fallback되고 있었음). float()로 명시 변환해서 표준 파이썬 float으로 통일.
             ocr_lines.append({
                 "text": text,
-                "x": box["x0"] / img_w,
-                "y": box["y0"] / img_h,
-                "w": (box["x1"] - box["x0"]) / img_w,
-                "h": (box["y1"] - box["y0"]) / img_h,
+                "x": float(box["x0"] / img_w),
+                "y": float(box["y0"] / img_h),
+                "w": float((box["x1"] - box["x0"]) / img_w),
+                "h": float((box["y1"] - box["y0"]) / img_h),
             })
     parsed["ocr_lines"] = ocr_lines
     return parsed, lines
