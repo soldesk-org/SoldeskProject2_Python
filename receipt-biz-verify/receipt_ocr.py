@@ -27,12 +27,24 @@ class MenuItem(BaseModel):
     price: int
 
 
+class OcrLine(BaseModel):
+    text: str
+    # 0~1로 정규화된 상대 좌표(원본 이미지 크기와 무관하게 프론트에서 <img> 표시 크기에 그대로
+    # 곱해서 쓸 수 있도록). 2026-08-19 추가 — 인식 성공 애니메이션에서 실제로 읽은 단어 위에
+    # 초록 박스를 정확히 표시하기 위함(그 전엔 스캔 라인만 훑고 실제 위치는 안 보여줬음).
+    x: float
+    y: float
+    w: float
+    h: float
+
+
 class ReceiptResult(BaseModel):
     store_name: str | None
     order_datetime: str | None
     menu_items: list[MenuItem]
     total_price: int | None
     transaction_id: str | None
+    ocr_lines: list[OcrLine] = []
 
 
 # ---------------------------------------------------------------------------
@@ -142,7 +154,12 @@ def group_into_lines(results, y_tolerance=12):
     for box, text, score in results:
         ys = [p[1] for p in box]
         xs = [p[0] for p in box]
-        items.append({"text": text.strip(), "y": sum(ys) / len(ys), "x": min(xs), "conf": score})
+        items.append({
+            "text": text.strip(), "y": sum(ys) / len(ys), "x": min(xs), "conf": score,
+            # 2026-08-19 추가 — 단어 단위 박스(픽셀 좌표)를 함께 들고 다닌다. 같은 줄로 묶일 때
+            # 이 박스들의 합집합을 그 줄의 표시용 박스로 쓴다.
+            "x0": min(xs), "y0": min(ys), "x1": max(xs), "y1": max(ys),
+        })
 
     items.sort(key=lambda i: i["y"])
 
@@ -162,11 +179,16 @@ def group_into_lines(results, y_tolerance=12):
         lines.append(current_line)
 
     line_texts = []
+    line_boxes = []
     for line in lines:
         line.sort(key=lambda i: i["x"])
         text = " ".join(i["text"] for i in line)
         line_texts.append(text)
-    return line_texts
+        line_boxes.append({
+            "x0": min(i["x0"] for i in line), "y0": min(i["y0"] for i in line),
+            "x1": max(i["x1"] for i in line), "y1": max(i["y1"] for i in line),
+        })
+    return line_texts, line_boxes
 
 
 def _format_date(d):
@@ -448,8 +470,28 @@ def parse_receipt_lines(lines):
 def parse_receipt(engine: RapidOCR, image, preprocess: bool = True):
     processed = preprocess_image(image) if preprocess else image
     results = run_ocr(engine, processed)
-    lines = group_into_lines(results)
+    lines, line_boxes = group_into_lines(results)
     parsed = parse_receipt_lines(lines)
+
+    # 2026-08-19 추가 — 줄 박스(픽셀)를 0~1 상대 좌표로 정규화해서 원본 해상도와 무관하게 프론트에서
+    # 바로 쓸 수 있게 한다.
+    ocr_lines = []
+    if hasattr(processed, "shape"):
+        img_h, img_w = processed.shape[:2]
+    else:
+        img_w = img_h = 0
+    if img_w and img_h:
+        for text, box in zip(lines, line_boxes):
+            if not text:
+                continue
+            ocr_lines.append({
+                "text": text,
+                "x": box["x0"] / img_w,
+                "y": box["y0"] / img_h,
+                "w": (box["x1"] - box["x0"]) / img_w,
+                "h": (box["y1"] - box["y0"]) / img_h,
+            })
+    parsed["ocr_lines"] = ocr_lines
     return parsed, lines
 
 
@@ -655,9 +697,14 @@ async def parse_receipt_endpoint(request: Request, file: UploadFile = File(...))
     except ValueError as e:
         return receipt_error_response(ReceiptError("INVALID_IMAGE", str(e), status_code=400))
 
+    ocr_lines = parsed.get("ocr_lines", [])
     if config.UPSTAGE_API_KEY and (not lines or _needs_ai_assist(parsed)):
         try:
             parsed = await asyncio.to_thread(correct_receipt_with_ai, content, parsed, config.UPSTAGE_API_KEY)
+            # AI 보정은 값만 다시 뽑아서 통째로 새 dict를 만들기 때문에(_normalize_extraction),
+            # 처음 RapidOCR 단계에서 뽑아둔 위치 정보(ocr_lines)는 그대로 들고 온다 — AI가 텍스트
+            # 값을 고쳐도 "화면에 실제로 어디 글자가 있었는지"는 원본 OCR 위치 그대로가 맞다.
+            parsed["ocr_lines"] = ocr_lines
         except Exception:
             # 업스테이지 호출이 실패해도 무료 파서 결과로는 계속 진행하지만(가용성 우선), 로그 없이
             # 조용히 넘어가면 "보정이 왜 안 됐는지" 알 방법이 없어진다(2026-07-22 실제로 겪음).
